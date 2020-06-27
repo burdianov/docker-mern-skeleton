@@ -1,0 +1,84 @@
+version: '3'
+
+services:
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+    container_name: docker-realworld-frontend
+    command: serve -s build -l 3000
+    # exposing ports is not required if using nginx proxying
+    # ports:
+    #   - 3000:3000
+    restart: unless-stopped
+    networks:
+      - docker-realworld-network
+  api:
+    build: ./api
+    container_name: docker-realworld-api
+    command: npm run start
+    restart: unless-stopped
+    # exposing ports is not required if using nginx proxying
+    # ports:
+    #   - 3001:3001
+    environment:
+      - PORT=3001
+      # HOST is used when redirecting
+      # - HOST=http://docker-realworld.com
+      - MONGO_URL=mongodb://api_db:27017/api
+      - AUTH_API_URL=http://auth:3002/api
+    depends_on:
+      - api_db
+    networks:
+      - docker-realworld-network
+  auth:
+    build: ./auth
+    container_name: docker-realworld-auth
+    command: npm run start
+    restart: unless-stopped
+    # exposing ports is not required if using nginx proxying
+    # ports:
+    #   - 3002:3002
+    environment:
+      - PORT=3002
+      # HOST is used when redirecting
+      # - HOST=http://docker-realworld.com
+      - MONGO_URL=mongodb://auth_db:27017/auth
+      - API_URL=http://api:3001/api
+    depends_on:
+      - auth_db
+    networks:
+      - docker-realworld-network
+  api_db:
+    image: mongo
+    container_name: docker-realworld-api-db
+    volumes:
+      - mongodb_api:/data/db
+    networks:
+      - docker-realworld-network
+  auth_db:
+    image: mongo
+    container_name: docker-realworld-auth-db
+    volumes:
+      - mongodb_auth:/data/db
+    networks:
+      - docker-realworld-network
+  nginx:
+    image: nginx:stable-alpine
+    container_name: docker-realworld-nginx
+    ports:
+      - 80:80
+    volumes:
+      - ./nginx/nginx.conf.prod:/etc/nginx/conf.d/nginx.conf
+    depends_on:
+      - frontend
+      - api
+      - auth
+    networks:
+      - docker-realworld-network
+volumes:
+  mongodb_api:
+  mongodb_auth:
+networks:
+  docker-realworld-network:
+    driver: bridge
